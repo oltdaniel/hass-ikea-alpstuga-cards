@@ -43,21 +43,24 @@ Each tile is clickable and opens the entity's more-info dialog.
 
 1. HACS → **⋮** → **Custom repositories**.
 2. Add `https://github.com/oltdaniel/hass-ikea-alpstuga-cards` as a **Dashboard** (Lovelace) repository.
-3. Install **IKEA ALPSTUGA Air Quality Card**.
+3. Install **IKEA ALPSTUGA Air Quality Cards**.
 4. HACS registers the resource automatically. Reload your browser (Ctrl/Cmd-Shift-R).
+
+Both `custom:alpstuga-card` and `custom:alpstuga-card-advanced` are registered via
+the single `alpstuga-cards.js` entry file, so **no manual resource is needed**.
 
 ### Manual
 
-1. Copy `alpstuga-card.js` (and `alpstuga-card-advanced.js` if you want history)
-   into `config/www/`.
-2. Add each as a dashboard resource — **Settings → Dashboards → ⋮ → Resources → Add**:
-   - URL: `/local/alpstuga-card.js` (and `/local/alpstuga-card-advanced.js`)
+1. Copy all three JS files (`alpstuga-cards.js`, `alpstuga-card.js`,
+   `alpstuga-card-advanced.js`) into `config/www/` — keep them side by side, as
+   `alpstuga-cards.js` imports the other two.
+2. Add **one** dashboard resource — **Settings → Dashboards → ⋮ → Resources → Add**:
+   - URL: `/local/alpstuga-cards.js`
    - Type: **JavaScript Module**
 3. Hard-reload your browser.
 
-> **HACS + advanced card:** HACS auto-registers only the basic card. To use the
-> advanced card, add its resource manually (as above) pointing at
-> `/hacsfiles/hass-ikea-alpstuga-cards/alpstuga-card-advanced.js`.
+> Only want one card? Add just that file (`/local/alpstuga-card.js` or
+> `/local/alpstuga-card-advanced.js`) as the resource instead — each is standalone.
 
 ## Configuration
 
