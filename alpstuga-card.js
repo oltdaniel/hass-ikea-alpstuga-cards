@@ -25,7 +25,7 @@
  * Either `device` or one or more `entities` must be provided.
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "0.1.0";
 
 /* -------------------------------------------------------------------------- */
 /* Metric definitions                                                         */
