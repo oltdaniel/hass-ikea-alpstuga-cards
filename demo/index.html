@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ALPSTUGA cards — demo</title>
+    <!-- Roboto (HA's UI font) from a CDN — no vendored font files. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        font-family: "Roboto", "Noto", "Helvetica Neue", Arial, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0 0 16px;
+        color: #222;
+      }
+      .stage {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .col {
+        flex: 0 0 380px;
+        border-radius: 16px;
+        padding: 16px;
+      }
+      .col h2 {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 12px;
+        opacity: 0.75;
+      }
+      .card-slot {
+        margin-bottom: 16px;
+      }
+      .card-slot:last-child {
+        margin-bottom: 0;
+      }
+
+      /* --- Home Assistant default theme variables ------------------------- */
+      /* Values taken from the HA frontend build's default light/dark themes.  */
+      .theme-light {
+        --primary-text-color: #212121;
+        --secondary-text-color: #727272;
+        --disabled-text-color: #bdbdbd;
+        --divider-color: rgba(0, 0, 0, 0.12);
+        --card-background-color: #ffffff;
+        --ha-card-background: #ffffff;
+        --primary-background-color: #fafafa;
+        --secondary-background-color: #e5e5e5;
+        --primary-color: #03a9f4;
+        --state-icon-color: #44739e;
+        --paper-item-icon-color: #44739e;
+        background: var(--primary-background-color);
+        color: var(--primary-text-color);
+      }
+      .theme-dark {
+        --primary-text-color: #e1e1e1;
+        --secondary-text-color: #9b9b9b;
+        --disabled-text-color: #6f6f6f;
+        --divider-color: rgba(225, 225, 225, 0.12);
+        --card-background-color: #1c1c1c;
+        --ha-card-background: #1c1c1c;
+        --primary-background-color: #111111;
+        --secondary-background-color: #282828;
+        --primary-color: #03a9f4;
+        --state-icon-color: #44739e;
+        --paper-item-icon-color: #44739e;
+        background: var(--primary-background-color);
+        color: var(--primary-text-color);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <section class="col theme-light">
+        <h2>Light</h2>
+        <div class="card-slot" data-card="alpstuga-card"></div>
+        <div class="card-slot" data-card="alpstuga-card-advanced"></div>
+      </section>
+      <section class="col theme-dark">
+        <h2>Dark</h2>
+        <div class="card-slot" data-card="alpstuga-card"></div>
+        <div class="card-slot" data-card="alpstuga-card-advanced"></div>
+      </section>
+    </div>
+
+    <script type="module">
+      /* -----------------------------------------------------------------
+       * Stub the two Home Assistant elements the cards rely on, so the real
+       * card code runs unmodified outside HA. Framing mirrors HA's real
+       * components: ha-card's flat bordered surface and ha-icon's SVG glyph.
+       * --------------------------------------------------------------- */
+
+      // The exact icon package the HA frontend renders, loaded from a CDN.
+      // Icons are resolved by name at runtime, so there is nothing to maintain
+      // when the cards change which icons they use.
+      import * as mdiIcons from "https://cdn.jsdelivr.net/npm/@mdi/js@7/+esm";
+
+      // "mdi:molecule-co2" -> mdiIcons.mdiMoleculeCo2
+      function mdiPath(name) {
+        if (!name || !name.startsWith("mdi:")) return "";
+        const key =
+          "mdi" +
+          name
+            .slice(4)
+            .split("-")
+            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+            .join("");
+        return mdiIcons[key] || "";
+      }
+
+      // ha-card: HA's flat, bordered card surface projecting its children.
+      class HaCard extends HTMLElement {
+        constructor() {
+          super();
+          const sr = this.attachShadow({ mode: "open" });
+          sr.innerHTML = `<style>
+            :host {
+              display: block;
+              background: var(--ha-card-background, var(--card-background-color, #fff));
+              border-radius: var(--ha-card-border-radius, 12px);
+              border: var(--ha-card-border-width, 1px) solid
+                var(--ha-card-border-color, var(--divider-color));
+              box-shadow: var(--ha-card-box-shadow, none);
+              color: var(--primary-text-color);
+            }
+          </style><slot></slot>`;
+        }
+      }
+      customElements.define("ha-card", HaCard);
+
+      // ha-icon: renders the same MDI path data HA does, as an SVG that
+      // inherits `color` via currentColor (so the cards' level tinting works).
+      class HaIcon extends HTMLElement {
+        set icon(v) {
+          this._icon = v;
+          this._render();
+        }
+        get icon() {
+          return this._icon;
+        }
+        connectedCallback() {
+          if (!this.firstChild) this._render();
+        }
+        _render() {
+          const d = mdiPath(this._icon);
+          this.style.display = "inline-flex";
+          this.innerHTML =
+            `<svg viewBox="0 0 24 24" focusable="false" ` +
+            `style="width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px);` +
+            `display:block;fill:currentColor"><path d="${d}"/></svg>`;
+        }
+      }
+      customElements.define("ha-icon", HaIcon);
+
+      /* -----------------------------------------------------------------
+       * Import the real cards.
+       * --------------------------------------------------------------- */
+      await import("../alpstuga-card.js");
+      await import("../alpstuga-card-advanced.js");
+
+      /* -----------------------------------------------------------------
+       * Demo data: a mock `hass` for one ALPSTUGA device.
+       * --------------------------------------------------------------- */
+      const HOURS = 24;
+      const now = Date.now();
+      const startMs = now - HOURS * 3600 * 1000;
+
+      // Deterministic wavy series generator.
+      function makeSeries(fn, points = 180) {
+        const out = [];
+        for (let i = 0; i < points; i++) {
+          const frac = i / (points - 1);
+          const t = startMs + frac * (now - startMs);
+          out.push({ s: String(fn(frac, i)), lu: t / 1000 });
+        }
+        return out;
+      }
+      const wig = (i, amp) => Math.sin(i * 1.7) * amp * 0.35; // small deterministic wiggle
+
+      const co2Series = makeSeries((f, i) => {
+        // daily arc 480 → 1150 → 620 with wiggle
+        const base = 480 + Math.sin(f * Math.PI) * 640 + Math.sin(f * 8) * 90;
+        return Math.max(420, Math.round(base + wig(i, 60)));
+      });
+      const pm25Series = makeSeries((f, i) => {
+        const base = 5 + Math.sin(f * 6) * 4 + (f > 0.55 && f < 0.7 ? 22 : 0); // a cooking spike
+        return Math.max(1, +(base + wig(i, 2)).toFixed(1));
+      });
+      const tempSeries = makeSeries((f, i) => {
+        const base = 20.5 + Math.sin(f * Math.PI - 0.6) * 2.4;
+        return +(base + wig(i, 0.4)).toFixed(1);
+      });
+      const humSeries = makeSeries((f, i) => {
+        const base = 46 - Math.sin(f * Math.PI - 0.6) * 8;
+        return Math.round(base + wig(i, 2));
+      });
+      // Air quality: a few segments incl. the cooking spike.
+      const aqiRaw = [
+        { s: "good", lu: startMs / 1000 },
+        { s: "fair", lu: (startMs + 6 * 3600e3) / 1000 },
+        { s: "good", lu: (startMs + 10 * 3600e3) / 1000 },
+        { s: "poor", lu: (startMs + 13.2 * 3600e3) / 1000 },
+        { s: "moderate", lu: (startMs + 14 * 3600e3) / 1000 },
+        { s: "good", lu: (startMs + 16 * 3600e3) / 1000 },
+      ];
+
+      const HISTORY = {
+        "sensor.alpstuga_co2": co2Series,
+        "sensor.alpstuga_pm25": pm25Series,
+        "sensor.alpstuga_temperature": tempSeries,
+        "sensor.alpstuga_humidity": humSeries,
+        "sensor.alpstuga_air_quality": aqiRaw,
+      };
+
+      const last = (arr) => arr[arr.length - 1].s;
+      const attr = (dc, unit) => ({ device_class: dc, unit_of_measurement: unit });
+
+      const hass = {
+        devices: { alpstuga1: { name: "Living Room" } },
+        entities: {
+          "sensor.alpstuga_air_quality": { device_id: "alpstuga1" },
+          "sensor.alpstuga_co2": { device_id: "alpstuga1" },
+          "sensor.alpstuga_pm25": { device_id: "alpstuga1" },
+          "sensor.alpstuga_temperature": { device_id: "alpstuga1" },
+          "sensor.alpstuga_humidity": { device_id: "alpstuga1" },
+        },
+        states: {
+          "sensor.alpstuga_air_quality": {
+            state: last(aqiRaw),
+            attributes: attr("enum", undefined),
+          },
+          "sensor.alpstuga_co2": {
+            state: last(co2Series),
+            attributes: attr("carbon_dioxide", "ppm"),
+          },
+          "sensor.alpstuga_pm25": {
+            state: last(pm25Series),
+            attributes: attr("pm25", "µg/m³"),
+          },
+          "sensor.alpstuga_temperature": {
+            state: last(tempSeries),
+            attributes: attr("temperature", "°C"),
+          },
+          "sensor.alpstuga_humidity": {
+            state: last(humSeries),
+            attributes: attr("humidity", "%"),
+          },
+        },
+        callWS: async ({ entity_ids }) => {
+          const res = {};
+          for (const id of entity_ids) if (HISTORY[id]) res[id] = HISTORY[id];
+          return res;
+        },
+      };
+
+      /* -----------------------------------------------------------------
+       * Instantiate every card slot.
+       * --------------------------------------------------------------- */
+      for (const slot of document.querySelectorAll(".card-slot")) {
+        const type = slot.dataset.card;
+        const el = document.createElement(type);
+        el.setConfig({ device: "alpstuga1", hours: HOURS });
+        el.hass = hass;
+        slot.appendChild(el);
+      }
+    </script>
+  </body>
+</html>

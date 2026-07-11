@@ -1,16 +1,48 @@
+<div align="center">
+
 # IKEA ALPSTUGA Air Quality Cards
 
-Two custom [Lovelace](https://developers.home-assistant.io/docs/frontend/custom-ui/custom-card)
-cards for the IKEA **ALPSTUGA** (Matter air quality sensor, E2495):
+Custom [Home Assistant](https://www.home-assistant.io/) Lovelace cards that
+visualise **every metric** the IKEA **ALPSTUGA** (Matter air quality sensor,
+E2495) exposes — Air Quality, CO₂, PM2.5, temperature and humidity — in one card,
+with an optional 24-hour history variant.
 
-- **`alpstuga-card`** — a compact card showing the current value of every metric.
-- **`alpstuga-card-advanced`** — the same, plus 24h history: an air-quality
-  timeline strip and per-metric sparklines with hover tooltips.
-  See [Advanced card](#advanced-card).
+[![HACS Custom][hacs-badge]][hacs]
+[![GitHub release][release-badge]][releases]
+[![License: MIT][license-badge]][license]
+[![Made for Home Assistant][hass-badge]][hass]
 
-## Basic card
+<img src="demo/preview.png" alt="Both cards shown in light and dark mode" width="900" />
 
-Shows **every metric** the ALPSTUGA exposes to Home Assistant in a single, tidy card:
+</div>
+
+## Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [How auto-detection works](#how-auto-detection-works)
+- [Colour thresholds](#colour-thresholds)
+- [Development](#development)
+- [Credits](#credits)
+
+## Features
+
+Two cards ship in this repository — install once, use either (or both):
+
+| Card | What it shows |
+| ---- | ------------- |
+| **`alpstuga-card`** | Current value of every metric in a compact tile layout. |
+| **`alpstuga-card-advanced`** | The same, plus 24h history: an air-quality timeline strip and per-metric sparklines with hover tooltips. |
+
+Both cards:
+
+- **Auto-detect** all ALPSTUGA entities from a single `device` id (with optional
+  per-entity overrides).
+- Show a **colour-coded Air Quality banner** (`good` → `extremely_poor`).
+- **Tint CO₂ / PM2.5** by level; leave temperature/humidity neutral.
+- Are **theme-aware** (light/dark) and open the entity's more-info dialog on click.
+- Ship a **graphical config editor** and register in the card picker.
 
 | Metric        | Unit    | Notes                                                     |
 | ------------- | ------- | --------------------------------------------------------- |
@@ -22,32 +54,21 @@ Shows **every metric** the ALPSTUGA exposes to Home Assistant in a single, tidy 
 
 > The ALPSTUGA has **no VOC sensor** (unlike the older VINDSTYRKA), so tVOC is not shown.
 
-Each tile is clickable and opens the entity's more-info dialog.
-
-## Preview
-
-```
-┌────────────────────────────────────────────┐
-│ 🙂  Living Room                             │
-│     Good                                    │  ← colour-coded AQI banner
-├──────────────────────┬─────────────────────┤
-│ 🟢 CO₂    612 ppm    │ 🟢 PM2.5   4 µg/m³   │
-├──────────────────────┼─────────────────────┤
-│ 🌡 Temperature 21.4°C│ 💧 Humidity  46 %    │
-└──────────────────────┴─────────────────────┘
-```
-
 ## Installation
 
 ### HACS (recommended)
 
-1. HACS → **⋮** → **Custom repositories**.
-2. Add `https://github.com/oltdaniel/hass-ikea-alpstuga-cards` as a **Dashboard** (Lovelace) repository.
-3. Install **IKEA ALPSTUGA Air Quality Cards**.
-4. HACS registers the resource automatically. Reload your browser (Ctrl/Cmd-Shift-R).
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.][my-hacs-badge]][my-hacs]
 
-Both `custom:alpstuga-card` and `custom:alpstuga-card-advanced` are registered via
-the single `alpstuga-cards.js` entry file, so **no manual resource is needed**.
+Click the button above, or add it manually:
+
+1. HACS → **⋮** → **Custom repositories**.
+2. Add `https://github.com/oltdaniel/hass-ikea-alpstuga-cards` with type **Dashboard**.
+3. Install **IKEA ALPSTUGA Air Quality Cards**.
+4. HACS registers the resource automatically. Hard-reload your browser (Ctrl/Cmd-Shift-R).
+
+Both `custom:alpstuga-card` and `custom:alpstuga-card-advanced` are registered via the
+single `alpstuga-cards.js` entry file, so **no manual resource is needed**.
 
 ### Manual
 
@@ -66,7 +87,7 @@ the single `alpstuga-cards.js` entry file, so **no manual resource is needed**.
 
 ### Via the UI
 
-Add a card → search **ALPSTUGA** → pick the card. In the visual editor, choose your
+Add a card → search **ALPSTUGA** → pick a card. In the visual editor, choose your
 ALPSTUGA device; the entities are detected automatically.
 
 ### Via YAML
@@ -79,11 +100,20 @@ device: 1a2b3c4d5e6f...        # the ALPSTUGA device id
 title: Living Room             # optional; defaults to the device name
 ```
 
-With explicit entity overrides (any subset; overrides win over auto-detection):
+The advanced card adds a `hours` history window:
+
+```yaml
+type: custom:alpstuga-card-advanced
+device: 1a2b3c4d5e6f...
+title: Living Room
+hours: 24                      # optional history window, 1–168 (default 24)
+```
+
+Explicit entity overrides work on either card (any subset; overrides win over
+auto-detection). You can also skip `device` entirely and configure everything here:
 
 ```yaml
 type: custom:alpstuga-card
-device: 1a2b3c4d5e6f...
 entities:
   air_quality: sensor.alpstuga_air_quality
   co2: sensor.alpstuga_carbon_dioxide
@@ -92,23 +122,26 @@ entities:
   humidity: sensor.alpstuga_humidity
 ```
 
-You can also skip `device` entirely and configure everything through `entities`.
-
 ### Options
 
-| Option     | Type   | Required            | Description                                                    |
-| ---------- | ------ | ------------------- | -------------------------------------------------------------- |
-| `device`   | string | one of `device`/`entities` | ALPSTUGA device id; auto-detects all entities by device_class. |
-| `title`    | string | no                  | Header text. Defaults to the device name.                      |
-| `entities` | map    | one of `device`/`entities` | Per-metric entity_id overrides: `air_quality`, `co2`, `pm25`, `temperature`, `humidity`. |
+| Option     | Type   | Required                   | Applies to | Description                                                    |
+| ---------- | ------ | -------------------------- | ---------- | ------------------------------------------------------------- |
+| `device`   | string | one of `device`/`entities` | both       | ALPSTUGA device id; auto-detects all entities by device_class. |
+| `title`    | string | no                         | both       | Header text. Defaults to the device name.                      |
+| `entities` | map    | one of `device`/`entities` | both       | Per-metric entity_id overrides: `air_quality`, `co2`, `pm25`, `temperature`, `humidity`. |
+| `hours`    | number | no                         | advanced   | History window in hours (1–168, default 24).                   |
 
 > **Finding the device id:** Settings → Devices → your ALPSTUGA → the id is the last
 > path segment of the URL (`/config/devices/device/<device_id>`).
 
+> **Advanced card & history:** charts use Home Assistant's `history_during_period` and
+> refresh every 5 min. An empty chart usually means the entity is excluded from the
+> `recorder`, or not enough time has passed to accumulate data.
+
 ## How auto-detection works
 
-Given a `device`, the card walks the entity registry for entities on that device and
-classifies each by its `device_class`:
+Given a `device`, the cards walk the entity registry for entities on that device and
+classify each by its `device_class`:
 
 - `carbon_dioxide` → CO₂
 - `pm25` → PM2.5
@@ -133,40 +166,41 @@ The AQI banner uses the device's reported state. Pollutant tiles are tinted loca
 
 Temperature and humidity are shown without alarm colouring.
 
-## Advanced card
+## Development
 
-`alpstuga-card-advanced` adds 24-hour history on top of the basic layout:
+`demo/index.html` renders both cards, in light and dark, against mock `hass` data —
+no Home Assistant required. It imports the real card files and stubs only the two HA
+elements they use (`ha-card`, `ha-icon`). For authenticity the stubs pull the real
+assets from a CDN: MDI icon paths from [`@mdi/js`](https://www.npmjs.com/package/@mdi/js)
+(resolved by name, so nothing to maintain) and Roboto from Google Fonts. **An internet
+connection is needed when opening the demo.**
 
-- an **Air Quality timeline strip** — coloured status segments across the window,
-  hover any segment for its state and time range;
-- a **sparkline** under each numeric metric (CO₂, PM2.5, temperature, humidity)
-  with ▼min / ▲max labels and a hover crosshair + tooltip.
+```bash
+# Regenerate demo/preview.png (needs python3 + Chromium/Chrome + internet):
+./demo/screenshot.sh
 
-History is fetched from Home Assistant's `history/history_during_period` websocket
-command and refreshed every 5 minutes. It shares the basic card's config plus a
-`hours` option:
-
-```yaml
-type: custom:alpstuga-card-advanced
-device: 1a2b3c4d5e6f...
-title: Living Room
-hours: 24                 # optional history window, 1–168 (default 24)
+# Or open it interactively (module imports need a server, not file://):
+python3 -m http.server 8899   # then browse to http://localhost:8899/demo/
 ```
 
-`device`, `title`, and `entities` behave exactly as in the basic card; the same
-auto-detection applies.
+## Credits
 
-| Option     | Type   | Required                   | Description                              |
-| ---------- | ------ | -------------------------- | ---------------------------------------- |
-| `device`   | string | one of `device`/`entities` | ALPSTUGA device id (auto-detect).        |
-| `title`    | string | no                         | Header text. Defaults to the device name.|
-| `hours`    | number | no                         | History window in hours (1–168, default 24). |
-| `entities` | map    | one of `device`/`entities` | Per-metric entity_id overrides.          |
-
-> History depends on Home Assistant's recorder keeping these entities. If a chart is
-> empty, check that the entity isn't excluded from `recorder` and that enough time
-> has passed to accumulate data.
+- Sensor hardware: [IKEA ALPSTUGA](https://www.ikea.com/de/de/p/alpstuga-luftqualitaetssensor-smart-50604187/) (Sensirion sensor module, Matter/Thread).
+- Icons: [Material Design Icons](https://pictogrammers.com/library/mdi/) via `@mdi/js`.
+- Built for [Home Assistant](https://www.home-assistant.io/) + [HACS](https://hacs.xyz/).
 
 ## License
 
-MIT
+[MIT](./LICENSE) © Daniel Oltmanns
+
+<!-- Badges -->
+[hacs]: https://github.com/hacs/integration
+[hacs-badge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
+[releases]: https://github.com/oltdaniel/hass-ikea-alpstuga-cards/releases
+[release-badge]: https://img.shields.io/github/v/release/oltdaniel/hass-ikea-alpstuga-cards?style=for-the-badge
+[license]: ./LICENSE
+[license-badge]: https://img.shields.io/github/license/oltdaniel/hass-ikea-alpstuga-cards?style=for-the-badge
+[hass]: https://www.home-assistant.io/
+[hass-badge]: https://img.shields.io/badge/Made%20for-Home%20Assistant-18BCF2?style=for-the-badge&logo=home-assistant&logoColor=white
+[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=oltdaniel&repository=hass-ikea-alpstuga-cards&category=plugin
+[my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
