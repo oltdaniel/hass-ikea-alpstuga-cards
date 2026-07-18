@@ -28,7 +28,7 @@
 import { t } from "./translations.js";
 import { guidelineLevel, resolveGuidelines } from "./guidelines.js";
 
-const CARD_VERSION = "0.1.0";
+const CARD_VERSION = "0.2.0";
 
 /* -------------------------------------------------------------------------- */
 /* Metric definitions                                                         */

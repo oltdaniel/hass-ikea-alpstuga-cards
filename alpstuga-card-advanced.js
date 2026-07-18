@@ -28,7 +28,7 @@
 import { t } from "./translations.js";
 import { guidelineLevel, resolveGuidelines } from "./guidelines.js";
 
-const CARD_VERSION = "0.1.0";
+const CARD_VERSION = "0.2.0";
 const REFRESH_MS = 5 * 60 * 1000; // refetch history every 5 minutes
 const SPARK_HEIGHT = 56; // px
 const MAX_POINTS = 500; // cap drawn points per sparkline
