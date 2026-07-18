@@ -192,8 +192,8 @@ published guidelines, not taste:
 | poor      | 12–30            | 20–70           |
 | very poor | < 12 or > 30     | < 20 or > 70    |
 
-Sources: PM2.5 — [WHO 2021 Global Air Quality Guidelines][who-aqg] (24-hour AQG
-+ interim targets); CO₂ — German [UBA / Umweltbundesamt][uba-co2] indoor guide
+Sources: PM2.5 — [WHO 2021 Global Air Quality Guidelines][who-aqg] (24-hour AQG +
+interim targets); CO₂ — German [UBA / Umweltbundesamt][uba-co2] indoor guide
 values (WHO sets no indoor CO₂ limit); Temperature — [WHO Housing & Health
 Guidelines][who-housing] comfort band, aligned with ASHRAE 55; Humidity —
 ASHRAE 55 / EPA healthy indoor range.
