@@ -1,7 +1,7 @@
 /**
  * IKEA ALPSTUGA Air Quality Card
  *
- * A custom Lovelace card that visualises every metric the IKEA ALPSTUGA
+ * A custom Lovelace card that visualizes every metric the IKEA ALPSTUGA
  * (Matter air quality sensor, E2495) exposes to Home Assistant in a single card:
  *
  *   - Air Quality  (enum: good / fair / moderate / poor / very_poor / extremely_poor)
@@ -26,6 +26,7 @@
  */
 
 import { t } from "./translations.js";
+import { guidelineLevel, resolveGuidelines } from "./guidelines.js";
 
 const CARD_VERSION = "0.1.0";
 
@@ -33,7 +34,7 @@ const CARD_VERSION = "0.1.0";
 /* Metric definitions                                                         */
 /* -------------------------------------------------------------------------- */
 
-// Colour ramp shared by the AQI badge and the pollutant tiles.
+// Color ramp shared by the AQI badge and the pollutant tiles.
 // Ordered from best to worst.
 const LEVEL_COLORS = {
   good: "#43a047",
@@ -56,35 +57,20 @@ const AQI_LEVELS = [
   "extremely_poor",
 ];
 
-// Maps a numeric reading to one of the LEVEL_COLORS keys via ascending
-// thresholds. `bounds` are the upper limits for good/fair/moderate/poor;
-// anything above the last bound is "very_poor".
-function levelFromBounds(value, bounds) {
-  const [g, f, m, p] = bounds;
-  if (value < g) return "good";
-  if (value < f) return "fair";
-  if (value < m) return "moderate";
-  if (value < p) return "poor";
-  return "very_poor";
-}
-
-// The five tiles rendered below the AQI banner. `match` maps a Home Assistant
-// device_class to this metric during auto-detection. `level` (optional) tints
-// the tile based on the reading.
+// The tiles rendered below the AQI banner. `deviceClasses` maps a Home
+// Assistant device_class to this metric during auto-detection. Tiles are tinted
+// by the active guideline profile (see guidelines.js); which metrics get a
+// color is decided there, not here.
 const METRICS = [
   {
     key: "co2",
     icon: "mdi:molecule-co2",
     deviceClasses: ["carbon_dioxide"],
-    // ppm: <800 good, <1000 fair, <1400 moderate, <2000 poor, else very poor
-    level: (v) => levelFromBounds(v, [800, 1000, 1400, 2000]),
   },
   {
     key: "pm25",
     icon: "mdi:blur",
     deviceClasses: ["pm25"],
-    // µg/m³: WHO-ish indoor bands
-    level: (v) => levelFromBounds(v, [12, 24, 36, 50]),
   },
   {
     key: "temperature",
@@ -100,7 +86,7 @@ const METRICS = [
 
 const METRIC_KEYS = METRICS.map((m) => m.key);
 
-// AQI states used to recognise the air-quality enum sensor during detection.
+// AQI states used to recognize the air-quality enum sensor during detection.
 const AQI_STATES = AQI_LEVELS;
 
 /* -------------------------------------------------------------------------- */
@@ -122,7 +108,7 @@ class AlpstugaCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { device: "", entities: {} };
+    return { device: "", guidelines: "who", entities: {} };
   }
 
   setConfig(config) {
@@ -135,6 +121,7 @@ class AlpstugaCard extends HTMLElement {
       );
     }
     this._config = config;
+    this._profile = resolveGuidelines(config.guidelines); // null when disabled
     this._built = false; // force a structural rebuild
     if (this._hass) this._render();
   }
@@ -334,13 +321,9 @@ class AlpstugaCard extends HTMLElement {
         el.value.textContent = state.state;
       }
 
-      // Tint pollutant tiles by reading; leave temp/humidity neutral.
-      if (metric.level && Number.isFinite(num)) {
-        const lvl = metric.level(num);
-        el.icon.style.color = LEVEL_COLORS[lvl];
-      } else {
-        el.icon.style.color = "";
-      }
+      // Tint the tile icon by the active guideline profile (null = disabled).
+      const lvl = guidelineLevel(this._profile, metric.key, num);
+      el.icon.style.color = lvl ? LEVEL_COLORS[lvl] : "";
     }
   }
 
@@ -495,7 +478,7 @@ class AlpstugaCardEditor extends HTMLElement {
     this._hass = hass;
     if (this._form) {
       this._form.hass = hass;
-      this._form.schema = this._schema; // re-localise labels for the new language
+      this._form.schema = this._schema; // re-localize labels for the new language
     }
   }
 
@@ -503,6 +486,18 @@ class AlpstugaCardEditor extends HTMLElement {
     return [
       { name: "device", selector: { device: { integration: "matter" } } },
       { name: "title", selector: { text: {} } },
+      {
+        name: "guidelines",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "who", label: t(this._hass, "editor.guidelines_who") },
+              { value: "none", label: t(this._hass, "editor.guidelines_none") },
+            ],
+          },
+        },
+      },
       {
         name: "entities",
         type: "expandable",
@@ -523,6 +518,7 @@ class AlpstugaCardEditor extends HTMLElement {
     const keys = {
       device: "editor.device",
       title: "editor.title",
+      guidelines: "editor.guidelines",
       air_quality: "metric.air_quality",
       co2: "metric.co2",
       pm25: "metric.pm25",
@@ -568,7 +564,7 @@ window.customCards.push({
   type: "alpstuga-card",
   name: "IKEA ALPSTUGA Air Quality Card",
   description:
-    "Visualises all metrics of the IKEA ALPSTUGA Matter air quality sensor (Air Quality, CO₂, PM2.5, temperature, humidity) in one card.",
+    "Visualizes all metrics of the IKEA ALPSTUGA Matter air quality sensor (Air Quality, CO₂, PM2.5, temperature, humidity) in one card.",
   preview: true,
   documentationURL:
     "https://github.com/oltdaniel/hass-ikea-alpstuga-cards",

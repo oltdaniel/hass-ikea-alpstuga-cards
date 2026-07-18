@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ALPSTUGA cards — guideline coloring</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        font-family: "Roboto", "Noto", "Helvetica Neue", Arial, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        display: inline-block; /* shrink-wrap so the screenshot crops to content */
+      }
+      .stage {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        width: 380px;
+      }
+
+      /* Home Assistant default light theme variables. */
+      .theme-light {
+        --primary-text-color: #212121;
+        --secondary-text-color: #727272;
+        --disabled-text-color: #bdbdbd;
+        --divider-color: rgba(0, 0, 0, 0.12);
+        --card-background-color: #ffffff;
+        --ha-card-background: #ffffff;
+        --primary-background-color: #fafafa;
+        --secondary-background-color: #e5e5e5;
+        --primary-color: #03a9f4;
+        --state-icon-color: #44739e;
+        --paper-item-icon-color: #44739e;
+        background: var(--primary-background-color);
+        color: var(--primary-text-color);
+      }
+    </style>
+  </head>
+  <body class="theme-light">
+    <div class="stage">
+      <!-- Basic card in two conditions: shows the guideline tint across the
+           range, including the now-colored temperature & humidity tiles. -->
+      <div class="col">
+        <div class="card-slot" data-scene="fresh" data-card="alpstuga-card"></div>
+        <div class="card-slot" data-scene="stuffy" data-card="alpstuga-card"></div>
+      </div>
+      <!-- Advanced card: sparklines tinted by each metric's current level. -->
+      <div class="col">
+        <div class="card-slot" data-scene="advanced" data-card="alpstuga-card-advanced"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { HOURS, makeSeries, wig, buildHass } from "./harness.js";
+      await import("../alpstuga-card.js");
+      await import("../alpstuga-card-advanced.js");
+
+      const startMs = Date.now() - HOURS * 3600 * 1000;
+      const flat = (v, amp = 0) =>
+        makeSeries((f, i) => +(v + wig(i, amp)).toFixed(1));
+      const aqi = (level) => [{ s: level, lu: startMs / 1000 }];
+
+      // A fresh, comfortable room — reads mostly green.
+      const fresh = buildHass({
+        deviceName: "Study",
+        metrics: {
+          air_quality: { dc: "enum", data: aqi("good") },
+          co2: { dc: "carbon_dioxide", unit: "ppm", data: flat(640, 40) },
+          pm25: { dc: "pm25", unit: "µg/m³", data: flat(5, 2) },
+          temperature: { dc: "temperature", unit: "°C", data: flat(21.5, 0.4) },
+          humidity: { dc: "humidity", unit: "%", data: flat(44, 2) },
+        },
+      });
+
+      // A stuffy room — warm, damp, high CO2: guideline colors light up.
+      const stuffy = buildHass({
+        deviceName: "Kitchen",
+        metrics: {
+          air_quality: { dc: "enum", data: aqi("poor") },
+          co2: { dc: "carbon_dioxide", unit: "ppm", data: flat(1650, 60) },
+          pm25: { dc: "pm25", unit: "µg/m³", data: flat(30, 3) },
+          temperature: { dc: "temperature", unit: "°C", data: flat(27, 0.4) },
+          humidity: { dc: "humidity", unit: "%", data: flat(68, 2) },
+        },
+      });
+
+      // Advanced card: trends that end inside colored bands, so each
+      // sparkline is tinted by its current level.
+      const co2Trend = makeSeries((f, i) =>
+        Math.max(500, Math.round(600 + f * 760 + Math.sin(f * 7) * 70 + wig(i, 50)))
+      ); // ends ~1360 -> poor (orange)
+      const pm25Trend = makeSeries((f, i) =>
+        Math.max(1, +(6 + Math.sin(f * 5) * 3 + (f > 0.7 ? (f - 0.7) * 80 : 0) + wig(i, 2)).toFixed(1))
+      ); // ends ~28 -> moderate (amber)
+      const tempTrend = makeSeries((f, i) =>
+        +(21 + f * 4.6 + wig(i, 0.3)).toFixed(1)
+      ); // ends ~25.6 -> fair
+      const humTrend = makeSeries((f, i) =>
+        Math.round(48 + f * 15 + wig(i, 2))
+      ); // ends ~63 -> fair
+      const aqiTrend = [
+        { s: "good", lu: startMs / 1000 },
+        { s: "fair", lu: (startMs + 9 * 3600e3) / 1000 },
+        { s: "moderate", lu: (startMs + 15 * 3600e3) / 1000 },
+        { s: "poor", lu: (startMs + 20 * 3600e3) / 1000 },
+      ];
+      const advanced = buildHass({
+        deviceName: "Kitchen",
+        metrics: {
+          air_quality: { dc: "enum", data: aqiTrend },
+          co2: { dc: "carbon_dioxide", unit: "ppm", data: co2Trend },
+          pm25: { dc: "pm25", unit: "µg/m³", data: pm25Trend },
+          temperature: { dc: "temperature", unit: "°C", data: tempTrend },
+          humidity: { dc: "humidity", unit: "%", data: humTrend },
+        },
+      });
+
+      const scenes = { fresh, stuffy, advanced };
+      for (const slot of document.querySelectorAll(".card-slot")) {
+        const el = document.createElement(slot.dataset.card);
+        el.setConfig({ device: "alpstuga1", hours: HOURS });
+        el.hass = scenes[slot.dataset.scene];
+        slot.appendChild(el);
+      }
+    </script>
+  </body>
+</html>

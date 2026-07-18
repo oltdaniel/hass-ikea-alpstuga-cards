@@ -3,7 +3,7 @@
 # IKEA ALPSTUGA Air Quality Cards
 
 Custom [Home Assistant](https://www.home-assistant.io/) Lovelace cards that
-visualise **every metric** the IKEA **ALPSTUGA** (Matter air quality sensor,
+visualize **every metric** the IKEA **ALPSTUGA** (Matter air quality sensor,
 E2495) exposes — Air Quality, CO₂, PM2.5, temperature and humidity — in one card,
 with an optional 24-hour history variant.
 
@@ -22,7 +22,7 @@ with an optional 24-hour history variant.
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [How auto-detection works](#how-auto-detection-works)
-- [Colour thresholds](#colour-thresholds)
+- [Color thresholds](#color-thresholds)
 - [Development](#development)
 - [Credits](#credits)
 
@@ -39,20 +39,30 @@ Both cards:
 
 - **Auto-detect** all ALPSTUGA entities from a single `device` id (with optional
   per-entity overrides).
-- Show a **colour-coded Air Quality banner** (`good` → `extremely_poor`).
-- **Tint CO₂ / PM2.5** by level; leave temperature/humidity neutral.
+- Show a **color-coded Air Quality banner** (`good` → `extremely_poor`).
+- **Tint every metric by published guidelines** — CO₂, PM2.5, temperature and
+  humidity tiles (and the advanced card's sparklines) are colored by their
+  level. Toggle with `guidelines: none`. See [Color thresholds](#color-thresholds).
 - Are **theme-aware** (light/dark) and open the entity's more-info dialog on click.
 - Ship a **graphical config editor** and register in the card picker.
 
 | Metric        | Unit    | Notes                                                     |
 | ------------- | ------- | --------------------------------------------------------- |
-| Air Quality   | –       | `good` → `extremely_poor`, shown as a colour-coded banner |
-| CO₂           | ppm     | tile tinted by level                                      |
-| PM2.5         | µg/m³   | tile tinted by level                                      |
-| Temperature   | °C / °F | neutral tile                                              |
-| Humidity      | %       | neutral tile                                              |
+| Air Quality   | –       | `good` → `extremely_poor`, shown as a color-coded banner |
+| CO₂           | ppm     | tinted by air-quality level (WHO/UBA)                     |
+| PM2.5         | µg/m³   | tinted by air-quality level (WHO)                         |
+| Temperature   | °C / °F | tinted by comfort band (WHO/ASHRAE)                       |
+| Humidity      | %       | tinted by comfort band (ASHRAE/EPA)                       |
 
 > The ALPSTUGA has **no VOC sensor** (unlike the older VINDSTYRKA), so tVOC is not shown.
+
+<div align="center">
+
+<img src="demo/features.png" alt="Guideline coloring across a fresh room, a stuffy room, and the advanced card's tinted sparklines" width="820" />
+
+<sub>Guideline coloring: a fresh room (green) vs a stuffy one, and the advanced card's per-metric tinted sparklines.</sub>
+
+</div>
 
 ## Installation
 
@@ -72,10 +82,10 @@ single `index.js` entry file, so **no manual resource is needed**.
 
 ### Manual
 
-1. Copy all four JS files (`index.js`, `alpstuga-card.js`,
-   `alpstuga-card-advanced.js`, `translations.js`) into `config/www/` — keep them
-   side by side, as `index.js` imports the two cards and each card imports
-   `translations.js`.
+1. Copy all five JS files (`index.js`, `alpstuga-card.js`,
+   `alpstuga-card-advanced.js`, `translations.js`, `guidelines.js`) into
+   `config/www/` — keep them side by side, as `index.js` imports the two cards
+   and each card imports `translations.js` and `guidelines.js`.
 2. Add **one** dashboard resource — **Settings → Dashboards → ⋮ → Resources → Add**:
    - URL: `/local/index.js`
    - Type: **JavaScript Module**
@@ -83,7 +93,7 @@ single `index.js` entry file, so **no manual resource is needed**.
 
 > Only want one card? Add just that file (`/local/alpstuga-card.js` or
 > `/local/alpstuga-card-advanced.js`) as the resource instead — but keep
-> `translations.js` alongside it, as each card imports it.
+> `translations.js` and `guidelines.js` alongside it, as each card imports them.
 
 ## Configuration
 
@@ -109,6 +119,7 @@ type: custom:alpstuga-card-advanced
 device: 1a2b3c4d5e6f...
 title: Living Room
 hours: 24                      # optional history window, 1–168 (default 24)
+guidelines: who                # optional color source; `none` to disable (default who)
 ```
 
 Explicit entity overrides work on either card (any subset; overrides win over
@@ -132,6 +143,7 @@ entities:
 | `title`    | string | no                         | both       | Header text. Defaults to the device name.                      |
 | `entities` | map    | one of `device`/`entities` | both       | Per-metric entity_id overrides: `air_quality`, `co2`, `pm25`, `temperature`, `humidity`. |
 | `hours`    | number | no                         | advanced   | History window in hours (1–168, default 24).                   |
+| `guidelines` | string | no                       | both       | Color source for tiles/charts: `who` (default) or `none` to disable tinting. |
 
 > **Finding the device id:** Settings → Devices → your ALPSTUGA → the id is the last
 > path segment of the URL (`/config/devices/device/<device_id>`).
@@ -154,34 +166,66 @@ classify each by its `device_class`:
 Disabled and hidden entities are skipped. Any metric you set in `entities` overrides
 the detected one.
 
-## Colour thresholds
+## Color thresholds
 
-The AQI banner uses the device's reported state. Pollutant tiles are tinted locally:
+The AQI banner uses the device's reported air-quality state. Every other metric
+(tiles, and the sparklines on the advanced card) is tinted by the `guidelines`
+profile — `who` by default, or `none` to switch tinting off. Thresholds come from
+published guidelines, not taste:
 
-| Level          | CO₂ (ppm) | PM2.5 (µg/m³) |
-| -------------- | --------- | ------------- |
-| good           | < 800     | < 12          |
-| fair           | < 1000    | < 24          |
-| moderate       | < 1400    | < 36          |
-| poor           | < 2000    | < 50          |
-| very poor      | ≥ 2000    | ≥ 50          |
+**Pollutants** (monotonic — higher is worse):
 
-Temperature and humidity are shown without alarm colouring.
+| Level     | CO₂ (ppm) | PM2.5 (µg/m³) |
+| --------- | --------- | ------------- |
+| good      | < 800     | < 15          |
+| fair      | < 1000    | < 25          |
+| moderate  | < 1400    | < 37.5        |
+| poor      | < 2000    | < 50          |
+| very poor | ≥ 2000    | ≥ 50          |
+
+**Comfort** (bidirectional — too low *and* too high are bad):
+
+| Level     | Temperature (°C) | Humidity (% RH) |
+| --------- | ---------------- | --------------- |
+| good      | 18–24            | 30–60           |
+| fair      | 16–26            | 25–65           |
+| poor      | 12–30            | 20–70           |
+| very poor | < 12 or > 30     | < 20 or > 70    |
+
+Sources: PM2.5 — [WHO 2021 Global Air Quality Guidelines][who-aqg] (24-hour AQG
++ interim targets); CO₂ — German [UBA / Umweltbundesamt][uba-co2] indoor guide
+values (WHO sets no indoor CO₂ limit); Temperature — [WHO Housing & Health
+Guidelines][who-housing] comfort band, aligned with ASHRAE 55; Humidity —
+ASHRAE 55 / EPA healthy indoor range.
+
+New standards can be added as named profiles in `guidelines.js` without touching
+the cards.
+
+[who-aqg]: https://www.who.int/news-room/questions-and-answers/item/who-global-air-quality-guidelines
+[uba-co2]: https://pubmed.ncbi.nlm.nih.gov/19043767/
+[who-housing]: https://www.who.int/publications/i/item/9789241550376
 
 ## Development
 
-`demo/index.html` renders both cards, in light and dark, against mock `hass` data —
-no Home Assistant required. It imports the real card files and stubs only the two HA
-elements they use (`ha-card`, `ha-icon`). For authenticity the stubs pull the real
-assets from a CDN: MDI icon paths from [`@mdi/js`](https://www.npmjs.com/package/@mdi/js)
-(resolved by name, so nothing to maintain) and Roboto from Google Fonts. **An internet
-connection is needed when opening the demo.**
+Two demo pages render the real card files against mock `hass` data — no Home
+Assistant required:
+
+- `demo/index.html` → **`preview.png`**, both cards in light and dark (the header).
+- `demo/features.html` → **`features.png`**, the guideline coloring across a
+  fresh vs stuffy room and the advanced card's tinted sparklines.
+
+Shared HA stubs and mock-data helpers live in `demo/harness.js`; the pages stub
+only the two HA elements the cards use (`ha-card`, `ha-icon`). For authenticity
+the stubs pull real assets from a CDN: MDI icon paths from
+[`@mdi/js`](https://www.npmjs.com/package/@mdi/js) (resolved by name, so nothing
+to maintain) and Roboto from Google Fonts. **An internet connection is needed
+when opening the demo.**
 
 ```bash
-# Regenerate demo/preview.png (needs python3 + Chromium/Chrome + internet):
+# Regenerate demo/preview.png + demo/features.png (needs python3 + Chromium/Chrome + internet):
 ./demo/screenshot.sh
 
-# Or open it interactively (module imports need a server, not file://):
+# Or open interactively (module imports need a server, not file://):
 python3 -m http.server 8899   # then browse to http://localhost:8899/demo/
 ```
 

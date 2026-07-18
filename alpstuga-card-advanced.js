@@ -2,7 +2,7 @@
  * IKEA ALPSTUGA Air Quality Card — Advanced
  *
  * Everything the basic `alpstuga-card` shows, plus history:
- *   - a 24h Air Quality timeline strip (coloured status segments)
+ *   - a 24h Air Quality timeline strip (colored status segments)
  *   - a 24h sparkline under each numeric metric (CO2, PM2.5, temperature,
  *     humidity) with min/max labels and a hover crosshair + tooltip.
  *
@@ -26,6 +26,7 @@
  */
 
 import { t } from "./translations.js";
+import { guidelineLevel, resolveGuidelines } from "./guidelines.js";
 
 const CARD_VERSION = "0.1.0";
 const REFRESH_MS = 5 * 60 * 1000; // refetch history every 5 minutes
@@ -57,29 +58,20 @@ const AQI_LEVELS = [
   "extremely_poor",
 ];
 
-function levelFromBounds(value, bounds) {
-  const [g, f, m, p] = bounds;
-  if (value < g) return "good";
-  if (value < f) return "fair";
-  if (value < m) return "moderate";
-  if (value < p) return "poor";
-  return "very_poor";
-}
-
+// Metrics are tinted by the active guideline profile (see guidelines.js);
+// `decimals` controls value/min-max formatting.
 const METRICS = [
   {
     key: "co2",
     icon: "mdi:molecule-co2",
     deviceClasses: ["carbon_dioxide"],
     decimals: 0,
-    level: (v) => levelFromBounds(v, [800, 1000, 1400, 2000]),
   },
   {
     key: "pm25",
     icon: "mdi:blur",
     deviceClasses: ["pm25"],
     decimals: 1,
-    level: (v) => levelFromBounds(v, [12, 24, 36, 50]),
   },
   {
     key: "temperature",
@@ -190,7 +182,7 @@ class AlpstugaAdvancedCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { device: "", hours: 24, entities: {} };
+    return { device: "", hours: 24, guidelines: "who", entities: {} };
   }
 
   setConfig(config) {
@@ -203,6 +195,7 @@ class AlpstugaAdvancedCard extends HTMLElement {
       );
     }
     this._config = { hours: 24, ...config };
+    this._profile = resolveGuidelines(config.guidelines); // null when disabled
     this._built = false;
     this._lastFetch = 0; // force refetch on config change
     if (this._hass) this._render();
@@ -476,6 +469,7 @@ class AlpstugaAdvancedCard extends HTMLElement {
         el.value.textContent = "—";
         el.minmax.textContent = "";
         el.icon.style.color = "";
+        el.levelColor = "";
         continue;
       }
       el.panel.classList.remove("missing");
@@ -486,11 +480,10 @@ class AlpstugaAdvancedCard extends HTMLElement {
       } else {
         el.value.textContent = state.state;
       }
-      if (metric.level && Number.isFinite(num)) {
-        el.icon.style.color = LEVEL_COLORS[metric.level(num)];
-      } else {
-        el.icon.style.color = "";
-      }
+      // Tint by the active guideline profile; the sparkline reuses levelColor.
+      const lvl = guidelineLevel(this._profile, metric.key, num);
+      el.levelColor = lvl ? LEVEL_COLORS[lvl] : "";
+      el.icon.style.color = el.levelColor;
     }
 
     this._drawAllCharts();
@@ -623,6 +616,17 @@ class AlpstugaAdvancedCard extends HTMLElement {
     endDot.setAttribute("cx", xOf(t1).toFixed(1));
     endDot.setAttribute("cy", yOf(pts[pts.length - 1].v).toFixed(1));
     endDot.setAttribute("class", "spark-end");
+
+    // Guideline tint: recolor the trace to match the tile. Uses inline style
+    // (not a presentation attribute) so it overrides the .spark-* CSS rules;
+    // when no color is set (guidelines off / neutral metric) CSS applies.
+    const col = el.levelColor;
+    if (col) {
+      line.style.stroke = col;
+      area.style.fill = col;
+      endDot.style.fill = col;
+      dot.style.stroke = col;
+    }
 
     svg.append(area, line, endDot, cross, dot);
     host.appendChild(svg);
@@ -838,7 +842,7 @@ class AlpstugaAdvancedCardEditor extends HTMLElement {
     this._hass = hass;
     if (this._form) {
       this._form.hass = hass;
-      this._form.schema = this._schema; // re-localise labels for the new language
+      this._form.schema = this._schema; // re-localize labels for the new language
     }
   }
 
@@ -849,6 +853,18 @@ class AlpstugaAdvancedCardEditor extends HTMLElement {
       {
         name: "hours",
         selector: { number: { min: 1, max: 168, mode: "box", unit_of_measurement: "h" } },
+      },
+      {
+        name: "guidelines",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "who", label: t(this._hass, "editor.guidelines_who") },
+              { value: "none", label: t(this._hass, "editor.guidelines_none") },
+            ],
+          },
+        },
       },
       {
         name: "entities",
@@ -871,6 +887,7 @@ class AlpstugaAdvancedCardEditor extends HTMLElement {
       device: "editor.device",
       title: "editor.title",
       hours: "editor.hours",
+      guidelines: "editor.guidelines",
       air_quality: "metric.air_quality",
       co2: "metric.co2",
       pm25: "metric.pm25",

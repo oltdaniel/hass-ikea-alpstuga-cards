@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# Render both ALPSTUGA cards (light + dark, with demo data) to demo/preview.png.
+# Render the ALPSTUGA card demos to PNGs with headless Chromium:
+#   demo/preview.png   — header showcase (both cards, light + dark)
+#   demo/features.png  — guideline-colouring showcase (basic + advanced)
 #
 # Serves the repo over a local HTTP server (ES module imports need http://,
-# not file://) and screenshots demo/index.html with headless Chromium.
+# not file://) and screenshots each demo page.
 #
-# Usage:  ./demo/screenshot.sh [output.png]
-#
+# Usage:  ./demo/screenshot.sh
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="${1:-$REPO_ROOT/demo/preview.png}"
 PORT="${PORT:-8899}"
 
 # Pick a Chromium/Chrome binary.
@@ -29,9 +29,15 @@ SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
 sleep 1
 
-"$CHROME" --headless=new --no-sandbox --disable-gpu \
-  --force-device-scale-factor=2 --hide-scrollbars \
-  --window-size=904,748 --virtual-time-budget=5000 \
-  --screenshot="$OUT" "http://localhost:$PORT/demo/index.html"
+# shoot <page> <output> <width> <height>
+shoot() {
+  "$CHROME" --headless=new --no-sandbox --disable-gpu \
+    --force-device-scale-factor=2 --hide-scrollbars \
+    --window-size="$3,$4" --virtual-time-budget=5000 \
+    --screenshot="$REPO_ROOT/demo/$2" \
+    "http://localhost:$PORT/demo/$1" >/dev/null 2>&1
+  echo "Wrote demo/$2"
+}
 
-echo "Wrote $OUT"
+shoot index.html    preview.png  904 748
+shoot features.html features.png 820 528
