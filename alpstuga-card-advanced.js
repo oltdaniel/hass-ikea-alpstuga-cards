@@ -25,6 +25,8 @@
  * Either `device` or one or more `entities` must be provided.
  */
 
+import { t } from "./translations.js";
+
 const CARD_VERSION = "0.1.0";
 const REFRESH_MS = 5 * 60 * 1000; // refetch history every 5 minutes
 const SPARK_HEIGHT = 56; // px
@@ -44,15 +46,16 @@ const LEVEL_COLORS = {
   unknown: "var(--disabled-text-color, #9e9e9e)",
 };
 
-const AQI_LABELS = {
-  good: "Good",
-  fair: "Fair",
-  moderate: "Moderate",
-  poor: "Poor",
-  very_poor: "Very poor",
-  extremely_poor: "Extremely poor",
-  unknown: "Unknown",
-};
+// Valid Air Quality cluster enum states, best to worst. Display text for each
+// (and for "unknown") comes from translations via `t(hass, "aqi.<level>")`.
+const AQI_LEVELS = [
+  "good",
+  "fair",
+  "moderate",
+  "poor",
+  "very_poor",
+  "extremely_poor",
+];
 
 function levelFromBounds(value, bounds) {
   const [g, f, m, p] = bounds;
@@ -66,7 +69,6 @@ function levelFromBounds(value, bounds) {
 const METRICS = [
   {
     key: "co2",
-    label: "CO₂",
     icon: "mdi:molecule-co2",
     deviceClasses: ["carbon_dioxide"],
     decimals: 0,
@@ -74,7 +76,6 @@ const METRICS = [
   },
   {
     key: "pm25",
-    label: "PM2.5",
     icon: "mdi:blur",
     deviceClasses: ["pm25"],
     decimals: 1,
@@ -82,21 +83,19 @@ const METRICS = [
   },
   {
     key: "temperature",
-    label: "Temperature",
     icon: "mdi:thermometer",
     deviceClasses: ["temperature"],
     decimals: 1,
   },
   {
     key: "humidity",
-    label: "Humidity",
     icon: "mdi:water-percent",
     deviceClasses: ["humidity"],
     decimals: 0,
   },
 ];
 
-const AQI_STATES = Object.keys(AQI_LABELS).filter((k) => k !== "unknown");
+const AQI_STATES = AQI_LEVELS;
 
 /* -------------------------------------------------------------------------- */
 /* Pure data helpers (unit-tested)                                            */
@@ -128,7 +127,7 @@ function buildAqiSegments(raw, startMs, endMs) {
     const ts = p.lu ?? p.lc ?? p.last_updated ?? p.last_changed;
     const s = String(p.s ?? p.state ?? "").toLowerCase();
     if (ts == null) continue;
-    const level = AQI_LABELS[s] ? s : "unknown";
+    const level = AQI_LEVELS.includes(s) ? s : "unknown";
     pts.push({ t: ts * 1000, level });
   }
   pts.sort((a, b) => a.t - b.t);
@@ -365,11 +364,15 @@ class AlpstugaAdvancedCard extends HTMLElement {
     axis.className = "strip-axis";
     const axL = document.createElement("span");
     const axR = document.createElement("span");
-    axR.textContent = "now";
     axis.append(axL, axR);
     stripWrap.append(stripLabel, strip, axis);
     card.appendChild(stripWrap);
-    Object.assign(this._els, { strip, stripLabel, stripAxisLeft: axL });
+    Object.assign(this._els, {
+      strip,
+      stripLabel,
+      stripAxisLeft: axL,
+      stripAxisRight: axR,
+    });
 
     // Metric panels
     const grid = document.createElement("div");
@@ -393,7 +396,7 @@ class AlpstugaAdvancedCard extends HTMLElement {
       value.className = "panel-value";
       const label = document.createElement("div");
       label.className = "panel-label";
-      label.textContent = metric.label;
+      label.textContent = t(this._hass, "metric." + metric.key);
       headText.append(value, label);
       const minmax = document.createElement("div");
       minmax.className = "panel-minmax";
@@ -435,9 +438,12 @@ class AlpstugaAdvancedCard extends HTMLElement {
     const hass = this._hass;
     const entities = this._resolveEntities();
 
+    const hours = this._hours();
     this._els.title.textContent = this._deviceName();
-    this._els.stripLabel.textContent = `Air quality · last ${this._hours()}h`;
-    this._els.stripAxisLeft.textContent = `-${this._hours()}h`;
+    this._els.stripLabel.textContent = t(this._hass, "strip.label", { hours });
+    this._els.stripAxisLeft.textContent = t(this._hass, "strip.ago", { hours });
+    this._els.stripAxisRight.textContent = t(this._hass, "strip.now");
+    this._els.strip.dataset.empty = t(this._hass, "strip.empty");
 
     // AQI banner
     const aqiId = entities.air_quality;
@@ -446,12 +452,13 @@ class AlpstugaAdvancedCard extends HTMLElement {
     let level = "unknown";
     if (aqiState) {
       const s = String(aqiState.state).toLowerCase();
-      if (AQI_LABELS[s]) level = s;
+      if (AQI_LEVELS.includes(s)) level = s;
     }
     const color = LEVEL_COLORS[level];
-    this._els.aqiLabel.textContent = aqiId
-      ? AQI_LABELS[level]
-      : "Air quality unavailable";
+    this._els.aqiLabel.textContent = t(
+      this._hass,
+      aqiId ? "aqi." + level : "aqi.unavailable"
+    );
     this._els.aqiLabel.style.color = color;
     this._els.bannerIcon.icon = this._aqiIcon(level);
     this._els.bannerIcon.style.color = color;
@@ -541,7 +548,7 @@ class AlpstugaAdvancedCard extends HTMLElement {
           hour: "2-digit",
           minute: "2-digit",
         });
-        this._showTooltip(ev, `${AQI_LABELS[seg.level]}`, `${s} – ${e}`);
+        this._showTooltip(ev, t(this._hass, "aqi." + seg.level), `${s} – ${e}`);
       });
       div.addEventListener("pointerleave", () => this._hideTooltip());
       host.appendChild(div);
@@ -654,7 +661,7 @@ class AlpstugaAdvancedCard extends HTMLElement {
               ""
             : ""
         }`,
-        `${metric.label} · ${time}`
+        `${t(this._hass, "metric." + metric.key)} · ${time}`
       );
     };
     svg.addEventListener("pointermove", onMove);
@@ -745,7 +752,7 @@ class AlpstugaAdvancedCard extends HTMLElement {
         background: var(--divider-color);
       }
       .strip.empty::after {
-        content: "no history yet"; position: absolute; inset: 0;
+        content: attr(data-empty); position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
         font-size: 0.7rem; color: var(--secondary-text-color);
       }
@@ -829,7 +836,10 @@ class AlpstugaAdvancedCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this._form) this._form.hass = hass;
+    if (this._form) {
+      this._form.hass = hass;
+      this._form.schema = this._schema; // re-localise labels for the new language
+    }
   }
 
   get _schema() {
@@ -843,7 +853,7 @@ class AlpstugaAdvancedCardEditor extends HTMLElement {
       {
         name: "entities",
         type: "expandable",
-        title: "Entity overrides (optional)",
+        title: t(this._hass, "editor.entities"),
         schema: [
           { name: "air_quality", selector: { entity: { domain: "sensor" } } },
           { name: "co2", selector: { entity: { domain: "sensor" } } },
@@ -855,25 +865,27 @@ class AlpstugaAdvancedCardEditor extends HTMLElement {
     ];
   }
 
+  // Maps each ha-form field name to a translation key.
   _computeLabel(schema) {
-    const labels = {
-      device: "ALPSTUGA device",
-      title: "Title (optional)",
-      hours: "History window (hours)",
-      air_quality: "Air Quality",
-      co2: "CO₂",
-      pm25: "PM2.5",
-      temperature: "Temperature",
-      humidity: "Humidity",
+    const keys = {
+      device: "editor.device",
+      title: "editor.title",
+      hours: "editor.hours",
+      air_quality: "metric.air_quality",
+      co2: "metric.co2",
+      pm25: "metric.pm25",
+      temperature: "metric.temperature",
+      humidity: "metric.humidity",
     };
-    return labels[schema.name] || schema.name;
+    const key = keys[schema.name];
+    return key ? t(this._hass, key) : schema.name;
   }
 
   _render() {
     if (!this._form) {
       this.innerHTML = "";
       const form = document.createElement("ha-form");
-      form.computeLabel = this._computeLabel;
+      form.computeLabel = (schema) => this._computeLabel(schema);
       form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
         this.dispatchEvent(

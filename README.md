@@ -68,20 +68,22 @@ Click the button above, or add it manually:
 4. HACS registers the resource automatically. Hard-reload your browser (Ctrl/Cmd-Shift-R).
 
 Both `custom:alpstuga-card` and `custom:alpstuga-card-advanced` are registered via the
-single `alpstuga-cards.js` entry file, so **no manual resource is needed**.
+single `index.js` entry file, so **no manual resource is needed**.
 
 ### Manual
 
-1. Copy all three JS files (`alpstuga-cards.js`, `alpstuga-card.js`,
-   `alpstuga-card-advanced.js`) into `config/www/` — keep them side by side, as
-   `alpstuga-cards.js` imports the other two.
+1. Copy all four JS files (`index.js`, `alpstuga-card.js`,
+   `alpstuga-card-advanced.js`, `translations.js`) into `config/www/` — keep them
+   side by side, as `index.js` imports the two cards and each card imports
+   `translations.js`.
 2. Add **one** dashboard resource — **Settings → Dashboards → ⋮ → Resources → Add**:
-   - URL: `/local/alpstuga-cards.js`
+   - URL: `/local/index.js`
    - Type: **JavaScript Module**
 3. Hard-reload your browser.
 
 > Only want one card? Add just that file (`/local/alpstuga-card.js` or
-> `/local/alpstuga-card-advanced.js`) as the resource instead — each is standalone.
+> `/local/alpstuga-card-advanced.js`) as the resource instead — but keep
+> `translations.js` alongside it, as each card imports it.
 
 ## Configuration
 

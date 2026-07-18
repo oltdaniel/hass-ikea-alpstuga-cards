@@ -25,6 +25,8 @@
  * Either `device` or one or more `entities` must be provided.
  */
 
+import { t } from "./translations.js";
+
 const CARD_VERSION = "0.1.0";
 
 /* -------------------------------------------------------------------------- */
@@ -43,16 +45,16 @@ const LEVEL_COLORS = {
   unknown: "var(--disabled-text-color, #9e9e9e)",
 };
 
-// Air Quality cluster enum -> friendly label.
-const AQI_LABELS = {
-  good: "Good",
-  fair: "Fair",
-  moderate: "Moderate",
-  poor: "Poor",
-  very_poor: "Very poor",
-  extremely_poor: "Extremely poor",
-  unknown: "Unknown",
-};
+// Valid Air Quality cluster enum states, best to worst. Display text for each
+// (and for "unknown") comes from translations via `t(hass, "aqi.<level>")`.
+const AQI_LEVELS = [
+  "good",
+  "fair",
+  "moderate",
+  "poor",
+  "very_poor",
+  "extremely_poor",
+];
 
 // Maps a numeric reading to one of the LEVEL_COLORS keys via ascending
 // thresholds. `bounds` are the upper limits for good/fair/moderate/poor;
@@ -72,7 +74,6 @@ function levelFromBounds(value, bounds) {
 const METRICS = [
   {
     key: "co2",
-    label: "CO₂",
     icon: "mdi:molecule-co2",
     deviceClasses: ["carbon_dioxide"],
     // ppm: <800 good, <1000 fair, <1400 moderate, <2000 poor, else very poor
@@ -80,7 +81,6 @@ const METRICS = [
   },
   {
     key: "pm25",
-    label: "PM2.5",
     icon: "mdi:blur",
     deviceClasses: ["pm25"],
     // µg/m³: WHO-ish indoor bands
@@ -88,13 +88,11 @@ const METRICS = [
   },
   {
     key: "temperature",
-    label: "Temperature",
     icon: "mdi:thermometer",
     deviceClasses: ["temperature"],
   },
   {
     key: "humidity",
-    label: "Humidity",
     icon: "mdi:water-percent",
     deviceClasses: ["humidity"],
   },
@@ -102,8 +100,8 @@ const METRICS = [
 
 const METRIC_KEYS = METRICS.map((m) => m.key);
 
-// AQI states, used to recognise the air-quality enum sensor during detection.
-const AQI_STATES = Object.keys(AQI_LABELS).filter((k) => k !== "unknown");
+// AQI states used to recognise the air-quality enum sensor during detection.
+const AQI_STATES = AQI_LEVELS;
 
 /* -------------------------------------------------------------------------- */
 /* The card                                                                   */
@@ -272,7 +270,7 @@ class AlpstugaCard extends HTMLElement {
       value.className = "tile-value";
       const label = document.createElement("div");
       label.className = "tile-label";
-      label.textContent = metric.label;
+      label.textContent = t(this._hass, "metric." + metric.key);
       body.append(value, label);
 
       tile.append(icon, body);
@@ -299,12 +297,13 @@ class AlpstugaCard extends HTMLElement {
     let level = "unknown";
     if (aqiState) {
       const s = String(aqiState.state).toLowerCase();
-      if (AQI_LABELS[s]) level = s;
+      if (AQI_LEVELS.includes(s)) level = s;
     }
     const color = LEVEL_COLORS[level];
-    this._els.aqiLabel.textContent = aqiId
-      ? AQI_LABELS[level]
-      : "Air quality unavailable";
+    this._els.aqiLabel.textContent = t(
+      this._hass,
+      aqiId ? "aqi." + level : "aqi.unavailable"
+    );
     this._els.aqiLabel.style.color = color;
     this._els.bannerIcon.icon = this._aqiIcon(level);
     this._els.bannerIcon.style.color = color;
@@ -494,7 +493,10 @@ class AlpstugaCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this._form) this._form.hass = hass;
+    if (this._form) {
+      this._form.hass = hass;
+      this._form.schema = this._schema; // re-localise labels for the new language
+    }
   }
 
   get _schema() {
@@ -504,7 +506,7 @@ class AlpstugaCardEditor extends HTMLElement {
       {
         name: "entities",
         type: "expandable",
-        title: "Entity overrides (optional)",
+        title: t(this._hass, "editor.entities"),
         schema: [
           { name: "air_quality", selector: { entity: { domain: "sensor" } } },
           { name: "co2", selector: { entity: { domain: "sensor" } } },
@@ -516,24 +518,26 @@ class AlpstugaCardEditor extends HTMLElement {
     ];
   }
 
+  // Maps each ha-form field name to a translation key.
   _computeLabel(schema) {
-    const labels = {
-      device: "ALPSTUGA device",
-      title: "Title (optional)",
-      air_quality: "Air Quality",
-      co2: "CO₂",
-      pm25: "PM2.5",
-      temperature: "Temperature",
-      humidity: "Humidity",
+    const keys = {
+      device: "editor.device",
+      title: "editor.title",
+      air_quality: "metric.air_quality",
+      co2: "metric.co2",
+      pm25: "metric.pm25",
+      temperature: "metric.temperature",
+      humidity: "metric.humidity",
     };
-    return labels[schema.name] || schema.name;
+    const key = keys[schema.name];
+    return key ? t(this._hass, key) : schema.name;
   }
 
   _render() {
     if (!this._form) {
       this.innerHTML = "";
       const form = document.createElement("ha-form");
-      form.computeLabel = this._computeLabel;
+      form.computeLabel = (schema) => this._computeLabel(schema);
       form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
         this.dispatchEvent(
